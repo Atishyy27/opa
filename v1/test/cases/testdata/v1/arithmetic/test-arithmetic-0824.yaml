@@ -60,3 +60,27 @@ cases:
     data: {}
     want_result:
       - x: -1
+  - note: ceil rounds up for a negative fraction above -1
+    query: data.generated.p = x
+    modules:
+      - |
+        package generated
+
+        p := x if {
+        	ceil(-0.5, x)
+        }
+    data: {}
+    want_result:
+      - x: 0
+  - note: ceil rounds up for a negative fraction above -1 (2)
+    query: data.generated.p = x
+    modules:
+      - |
+        package generated
+
+        p := x if {
+        	ceil(-0.9999, x)
+        }
+    data: {}
+    want_result:
+      - x: 0

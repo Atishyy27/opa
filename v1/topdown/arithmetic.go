@@ -35,7 +35,10 @@ func arithCeil(a *big.Float) (*big.Float, error) {
 	i, _ := a.Int(nil)
 	f := new(big.Float).SetInt(i)
 
-	if f.Signbit() || a.Cmp(f) == 0 {
+	// the sign is read off a, not f: truncating a value in (-1, 0) gives the
+	// big.Int zero, and a big.Float built from it is +0, so f.Signbit() is
+	// false for a negative operand.
+	if a.Signbit() || a.Cmp(f) == 0 {
 		return f, nil
 	}
 
@@ -46,7 +49,7 @@ func arithFloor(a *big.Float) (*big.Float, error) {
 	i, _ := a.Int(nil)
 	f := new(big.Float).SetInt(i)
 
-	if !f.Signbit() || a.Cmp(f) == 0 {
+	if !a.Signbit() || a.Cmp(f) == 0 {
 		return f, nil
 	}
 

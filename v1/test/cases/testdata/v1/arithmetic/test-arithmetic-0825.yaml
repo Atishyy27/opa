@@ -60,3 +60,27 @@ cases:
     data: {}
     want_result:
       - x: -2
+  - note: floor rounds down for a negative fraction above -1
+    query: data.generated.p = x
+    modules:
+      - |
+        package generated
+
+        p := x if {
+        	floor(-0.5, x)
+        }
+    data: {}
+    want_result:
+      - x: -1
+  - note: floor rounds down for a negative fraction above -1 (2)
+    query: data.generated.p = x
+    modules:
+      - |
+        package generated
+
+        p := x if {
+        	floor(-0.9, x)
+        }
+    data: {}
+    want_result:
+      - x: -1
