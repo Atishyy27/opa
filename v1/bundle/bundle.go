@@ -366,12 +366,12 @@ func (m *Manifest) validateAndInjectDefaults(b *Bundle) error {
 	// Validate rego versions in bundle.
 	if m.RegoVersion != nil {
 		if _, err := ast.RegoVersionFromIntStrict(*m.RegoVersion); err != nil {
-			return fmt.Errorf("manifest has %v", err)
+			return fmt.Errorf("manifest has %w", err)
 		}
 	}
 	for _, pattern := range util.KeysSorted(m.FileRegoVersions) {
 		if _, err := ast.RegoVersionFromIntStrict(m.FileRegoVersions[pattern]); err != nil {
-			return fmt.Errorf("manifest has %v for file '%s'", err, pattern)
+			return fmt.Errorf("manifest has %w for file '%s'", err, pattern)
 		}
 	}
 
@@ -933,7 +933,7 @@ func (r *Reader) Read() (Bundle, error) {
 		for _, entrypoint := range entrypoints {
 			ref, err := ast.PtrRef(ast.DefaultRootDocument, entrypoint)
 			if err != nil {
-				return empty, fmt.Errorf("failed to parse wasm module entrypoint '%s': %s", entrypoint, err)
+				return empty, fmt.Errorf("failed to parse wasm module entrypoint '%s': %w", entrypoint, err)
 			}
 			bundle.WasmModules[i].Entrypoints = append(bundle.WasmModules[i].Entrypoints, ref)
 		}
@@ -1447,7 +1447,7 @@ func (m *Manifest) numericRegoVersionForFile(path string) (*int, error) {
 		for _, pattern := range util.KeysSorted(m.FileRegoVersions) {
 			compiled, err := glob.Compile(pattern)
 			if err != nil {
-				return nil, fmt.Errorf("failed to compile glob pattern %s: %s", pattern, err)
+				return nil, fmt.Errorf("failed to compile glob pattern %s: %w", pattern, err)
 			}
 			m.compiledFileRegoVersions = append(m.compiledFileRegoVersions, fileRegoVersion{compiled, m.FileRegoVersions[pattern]})
 		}

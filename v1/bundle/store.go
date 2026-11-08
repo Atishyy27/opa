@@ -989,7 +989,7 @@ func writeDataAndModules(ctx context.Context, store storage.Store, txn storage.T
 
 			err := store.Truncate(ctx, txn, params, NewIterator(b.Raw))
 			if err != nil {
-				return fmt.Errorf("store truncate failed for bundle '%s': %v", name, err)
+				return fmt.Errorf("store truncate failed for bundle '%s': %w", name, err)
 			}
 
 			for _, f := range b.Raw {

@@ -3,6 +3,7 @@ package bundle
 import (
 	"bytes"
 	"cmp"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -5505,3 +5506,64 @@ func TestActivate_RuleReuse(t *testing.T) {
 		t.Fatalf("b with a function: %+v", s)
 	}
 }
+
+type badTruncateStore struct {
+	storage.Store
+	err error
+}
+
+func (s badTruncateStore) Truncate(context.Context, storage.Transaction, storage.TruncateParams, storage.Iterator) error {
+	return s.err
+}
+
+type badLoader struct {
+	DirectoryLoader
+	err error
+}
+
+func (b badLoader) NextFile() (*Descriptor, error) {
+	return nil, b.err
+}
+
+func TestWrappedErrors(t *testing.T) {
+	errSentinel := errors.New("sentinel error")
+
+	tests := []struct {
+		name    string
+		fn      func() error
+		wantErr string
+	}{
+		{
+			name: "store truncate",
+			fn: func() error {
+				b := &Bundle{
+					Manifest: Manifest{Roots: &[]string{""}},
+					Raw:      []Raw{{Path: "data.json"}},
+				}
+				return writeDataAndModules(t.Context(), badTruncateStore{Store: mock.New(), err: errSentinel}, nil, nil, map[string]*Bundle{"test-bundle": b}, false, ast.RegoUndefined)
+			},
+			wantErr: "store truncate failed for bundle 'test-bundle': sentinel error",
+		},
+		{
+			name: "bundle read",
+			fn: func() error {
+				_, err := NewCustomReader(badLoader{err: errSentinel}).Read()
+				return err
+			},
+			wantErr: "bundle read failed: sentinel error",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.fn()
+			if !errors.Is(err, errSentinel) {
+				t.Fatalf("expected errors.Is(err, errSentinel) to be true, got %v", err)
+			}
+			if err.Error() != tc.wantErr {
+				t.Fatalf("expected err.Error() to be %q, got %q", tc.wantErr, err.Error())
+			}
+		})
+	}
+}
+
