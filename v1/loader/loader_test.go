@@ -9,6 +9,7 @@ import (
 	"embed"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -20,10 +21,12 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"github.com/open-policy-agent/opa/internal/yaml"
 	"github.com/open-policy-agent/opa/v1/ast"
 	astJSON "github.com/open-policy-agent/opa/v1/ast/json"
 	"github.com/open-policy-agent/opa/v1/bundle"
 	"github.com/open-policy-agent/opa/v1/loader/extension"
+	"github.com/open-policy-agent/opa/v1/metrics"
 	"github.com/open-policy-agent/opa/v1/util"
 	"github.com/open-policy-agent/opa/v1/util/test"
 )
@@ -1775,4 +1778,112 @@ func TestAsBundleWithVerificationConfig(t *testing.T) {
 			})
 		})
 	}
+}
+
+func TestWrappedErrors(t *testing.T) {
+	rootDir := t.TempDir()
+	missingBundlePath := filepath.Join(rootDir, "missing-bundle")
+	missingBundleFile := filepath.Join(rootDir, "missing-bundle.tar.gz")
+	missingRegoFile := filepath.Join(rootDir, "missing.rego")
+
+	_, statBundlePathErr := os.Stat(missingBundlePath)
+	_, statBundleFileErr := os.Stat(missingBundleFile)
+	_, readRegoFileErr := os.ReadFile(missingRegoFile)
+
+	tests := []struct {
+		note    string
+		load    func() error
+		wantIs  error
+		wantMsg string
+	}{
+		{
+			note: "missing bundle path",
+			load: func() error {
+				_, err := NewFileLoader().AsBundle(missingBundlePath)
+				return err
+			},
+			wantIs:  fs.ErrNotExist,
+			wantMsg: fmt.Sprintf("error reading %q: %s", missingBundlePath, statBundlePathErr),
+		},
+		{
+			note: "missing bundle file",
+			load: func() error {
+				_, err := NewFileLoader().AsBundle(missingBundleFile)
+				return err
+			},
+			wantIs:  fs.ErrNotExist,
+			wantMsg: fmt.Sprintf("error reading %q: %s", missingBundleFile, statBundleFileErr),
+		},
+		{
+			note: "missing bundle path with fs.FS",
+			load: func() error {
+				_, err := NewFileLoader().WithFS(fstest.MapFS{}).AsBundle("missing-bundle")
+				return err
+			},
+			wantIs:  fs.ErrNotExist,
+			wantMsg: `error reading "missing-bundle": open missing-bundle: file does not exist`,
+		},
+		{
+			note: "missing file with fs.FS",
+			load: func() error {
+				_, err := NewFileLoader().WithFS(fstest.MapFS{}).AsBundle("missing-bundle.tar.gz")
+				return err
+			},
+			wantIs:  fs.ErrNotExist,
+			wantMsg: `error reading "missing-bundle.tar.gz": open missing-bundle.tar.gz: file does not exist`,
+		},
+		{
+			note: "missing bundle directory loader path",
+			load: func() error {
+				_, _, err := GetBundleDirectoryLoader(missingBundlePath)
+				return err
+			},
+			wantIs:  fs.ErrNotExist,
+			wantMsg: fmt.Sprintf("error reading %q: %s", missingBundlePath, statBundlePathErr),
+		},
+		{
+			note: "missing rego file",
+			load: func() error {
+				_, err := Rego(missingRegoFile)
+				return err
+			},
+			wantIs:  fs.ErrNotExist,
+			wantMsg: readRegoFileErr.Error(),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.note, func(t *testing.T) {
+			err := tc.load()
+			if err == nil {
+				t.Fatal("expected error but got nil")
+			}
+			if !errors.Is(err, tc.wantIs) {
+				t.Fatalf("expected errors.Is(%v, %v) to be true", err, tc.wantIs)
+			}
+			if err.Error() != tc.wantMsg {
+				t.Fatalf("expected error message %q, got %q", tc.wantMsg, err.Error())
+			}
+		})
+	}
+
+	t.Run("invalid YAML wraps underlying conversion error", func(t *testing.T) {
+		badYAML := []byte("\n  test:\ntest1: hello\n")
+		_, yamlErr := yaml.YAMLToJSON(badYAML)
+		if yamlErr == nil {
+			t.Fatal("expected YAMLToJSON error")
+		}
+
+		_, err := loadYAML("bad.yaml", badYAML, metrics.New())
+		if err == nil {
+			t.Fatal("expected error but got nil")
+		}
+		if unwrapped := errors.Unwrap(err); unwrapped == nil || unwrapped.Error() != yamlErr.Error() {
+			t.Fatalf("expected wrapped error %q, got %v", yamlErr, unwrapped)
+		}
+		wantMsg := fmt.Sprintf("%v: error converting YAML to JSON: %v", "bad.yaml", yamlErr)
+		if err.Error() != wantMsg {
+			t.Fatalf("expected error message %q, got %q", wantMsg, err.Error())
+		}
+	})
 }

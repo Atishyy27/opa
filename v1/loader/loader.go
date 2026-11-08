@@ -339,7 +339,7 @@ func GetBundleDirectoryLoaderFS(fsys fs.FS, path string, filter Filter) (bundle.
 		fi, err = os.Stat(path)
 	}
 	if err != nil {
-		return nil, false, fmt.Errorf("error reading %q: %s", path, err)
+		return nil, false, fmt.Errorf("error reading %q: %w", path, err)
 	}
 
 	var bundleLoader bundle.DirectoryLoader
@@ -873,7 +873,7 @@ func loadYAML(path string, bs []byte, m metrics.Metrics) (any, error) {
 	bs, err := yaml.YAMLToJSON(bs)
 	m.Timer(metrics.RegoDataParse).Stop()
 	if err != nil {
-		return nil, fmt.Errorf("%v: error converting YAML to JSON: %v", path, err)
+		return nil, fmt.Errorf("%v: error converting YAML to JSON: %w", path, err)
 	}
 	return loadJSON(path, bs, m)
 }
