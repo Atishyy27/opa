@@ -7533,6 +7533,27 @@ func TestParserText(t *testing.T) {
 	}
 }
 
+func TestParseNumberLocationText(t *testing.T) {
+	for _, input := range []string{"1000", "-1000", "-1.5", "-1e3", ".5", "-.5"} {
+		t.Run(input, func(t *testing.T) {
+			term, err := ParseTerm(input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result := string(term.Location.Text); result != input {
+				t.Fatalf("expected %q but got: %q", input, result)
+			}
+		})
+	}
+
+	t.Run("rule head value", func(t *testing.T) {
+		module := MustParseModule("package p\n\nx := -1000")
+		if result := string(module.Rules[0].Head.Value.Location.Text); result != "-1000" {
+			t.Fatalf("expected %q but got: %q", "-1000", result)
+		}
+	})
+}
+
 func TestRuleText(t *testing.T) {
 	input := ` package test
 

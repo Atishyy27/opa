@@ -2760,6 +2760,12 @@ func (p *Parser) parseNumber() *Term {
 		return nil
 	}
 
+	// The location was taken at the first token, so for "-1" or ".5" its
+	// text covers only the prefix.
+	if prefix != "" {
+		loc.Text = p.s.Text(loc.Offset, p.s.tokEnd)
+	}
+
 	// Note: Use the original string, do *not* round trip from
 	// the big.Float as it can cause precision loss.
 	return NumberTerm(json.Number(s)).SetLocation(loc)
