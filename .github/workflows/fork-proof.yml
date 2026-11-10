@@ -1,0 +1,33 @@
+name: fork-proof
+on:
+  push:
+    branches: ["ci/**"]
+permissions:
+  contents: read
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 3
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: fixed code passes
+        run: go test ./v1/ast/ -run 'TestParseNumberLocationText' -v -count=1
+      - name: old parser.go fails
+        run: |
+          git checkout HEAD~2 -- v1/ast/parser.go
+          if go test ./v1/ast/ -run 'TestParseNumberLocationText' -v -count=1 > old.txt 2>&1; then
+            cat old.txt; echo "UNEXPECTED: old code passed"; exit 1
+          fi
+          grep -E "expected|FAIL" old.txt | head -20
+          echo "EXPECTED: old code fails"
+      - name: whole ast package still passes
+        run: |
+          git checkout HEAD -- v1/ast/parser.go
+          go test ./v1/ast/ -count=1
+      - name: format check
+        run: test -z "$(gofmt -l v1/ast/parser.go v1/ast/parser_test.go)"
