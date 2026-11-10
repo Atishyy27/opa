@@ -166,6 +166,14 @@ allow if bar.foo == "value"`,
 			pos: 22, // "b" in "bar.foo"
 			exp: ErrNoDefinitionFound,
 		},
+		{
+			note: "no good match - import of package not loaded",
+			buffer: `package foo
+
+import data.missing`,
+			pos: 25, // "m" in "data.missing"
+			exp: ErrNoDefinitionFound,
+		},
 	}
 
 	for _, tc := range cases {
@@ -266,12 +274,77 @@ q[x.y] = 10 if {
 	z = 1
 }`
 
+	const importBufferModule = `package test
+
+import data.foo
+import data.foo.bar as t
+import data.split
+
+p := t`
+
 	cases := []struct {
 		note    string
 		modules map[string]string
 		pos     int
 		exp     *ast.Location
 	}{
+		{
+			note: "import - package",
+			modules: map[string]string{
+				"buffer.rego": importBufferModule,
+				"foo.rego":    fooModule,
+			},
+			pos: strings.Index(importBufferModule, "data.foo\n") + len("data."),
+			exp: &ast.Location{
+				File: "foo.rego",
+				Row:  1,
+				Col:  1,
+				Text: []byte("package"),
+			},
+		},
+		{
+			note: "import - data in package path",
+			modules: map[string]string{
+				"buffer.rego": importBufferModule,
+				"foo.rego":    fooModule,
+			},
+			pos: strings.Index(importBufferModule, "data.foo\n"),
+			exp: &ast.Location{
+				File: "foo.rego",
+				Row:  1,
+				Col:  1,
+				Text: []byte("package"),
+			},
+		},
+		{
+			note: "import - rule",
+			modules: map[string]string{
+				"buffer.rego": importBufferModule,
+				"foo.rego":    fooModule,
+			},
+			pos: strings.Index(importBufferModule, "bar as t"),
+			exp: &ast.Location{
+				File: "foo.rego",
+				Row:  4,
+				Col:  1,
+				Text: []byte("bar = 7"),
+			},
+		},
+		{
+			note: "import - package split across modules",
+			modules: map[string]string{
+				"buffer.rego":  importBufferModule,
+				"split_b.rego": "package split\n\nb := 1",
+				"split_a.rego": "package split\n\na := 1",
+			},
+			pos: strings.Index(importBufferModule, "split"),
+			exp: &ast.Location{
+				File: "split_a.rego",
+				Row:  1,
+				Col:  1,
+				Text: []byte("package"),
+			},
+		},
 		{
 			note: "q - a var in the body",
 			modules: map[string]string{

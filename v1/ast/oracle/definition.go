@@ -4,6 +4,7 @@
 package oracle
 
 import (
+	"maps"
 	"slices"
 
 	"github.com/open-policy-agent/opa/v1/ast"
@@ -38,4 +39,46 @@ func findDefinition(
 	}
 
 	return result.loc
+}
+
+// importAt returns the import whose path contains pos.
+func importAt(module *ast.Module, pos int) *ast.Import {
+	if module == nil {
+		return nil
+	}
+
+	for _, imp := range module.Imports {
+		if imp.Path == nil || imp.Path.Location == nil {
+			continue
+		}
+		loc := imp.Path.Location
+		if pos >= loc.Offset && pos < loc.Offset+len(loc.Text) {
+			return imp
+		}
+	}
+
+	return nil
+}
+
+// findImportDefinition returns the package declaration of the package an import
+// refers to. If the import refers to a rule instead, the rule is returned.
+// When a package is split across modules, the module that sorts first by name
+// is used, so the result is stable.
+func findImportDefinition(imp *ast.Import, compiler *ast.Compiler) *ast.Location {
+	path, ok := imp.Path.Value.(ast.Ref)
+	if !ok {
+		return nil
+	}
+
+	for _, name := range slices.Sorted(maps.Keys(compiler.Modules)) {
+		if pkg := compiler.Modules[name].Package; pkg != nil && pkg.Path.Equal(path) {
+			return pkg.Location
+		}
+	}
+
+	if rules := compiler.GetRulesExact(path); len(rules) > 0 {
+		return rules[0].Location
+	}
+
+	return nil
 }

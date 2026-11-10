@@ -75,6 +75,15 @@ func (o *Oracle) FindDefinition(q DefinitionQuery) (*DefinitionQueryResult, erro
 		return nil, ErrNoMatchFound
 	}
 
+	// Imports are removed from compiled modules, so look them up in the parsed one.
+	if imp := importAt(parsed, q.Pos); imp != nil {
+		location := findImportDefinition(imp, compiler)
+		if location == nil {
+			return nil, ErrNoDefinitionFound
+		}
+		return &DefinitionQueryResult{Result: location}, nil
+	}
+
 	stack := findContainingNodeStack(mod, q.Pos)
 	if len(stack) == 0 {
 		return nil, ErrNoMatchFound
