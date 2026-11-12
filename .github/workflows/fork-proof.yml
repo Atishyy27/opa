@@ -1,0 +1,35 @@
+name: fork-proof
+on:
+  push:
+    branches: ["ci/**"]
+permissions:
+  contents: read
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 3
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: fixed code passes
+        run: go test ./v1/ast/oracle/ -run 'TestOracleFindDefinition' -count=1 -v 2>&1 | grep -v -E '^(=== (RUN|PAUSE|CONT))' ; test ${PIPESTATUS[0]} -eq 0
+      - name: old definition.go fails
+        run: |
+          git checkout HEAD~2 -- v1/ast/oracle/definition.go v1/ast/oracle/oracle.go
+          if go test ./v1/ast/oracle/ -run 'TestOracleFindDefinition' -count=1 -v > old.txt 2>&1; then
+            cat old.txt | tail -40; echo "UNEXPECTED: old code passed"; exit 1
+          fi
+          grep -E -- "--- FAIL|expected|got|Location mismatch" old.txt | head -30
+          echo "EXPECTED: old code fails"
+      - name: whole oracle and ast packages still pass
+        run: |
+          git checkout HEAD -- v1/ast/oracle/definition.go v1/ast/oracle/oracle.go
+          go test ./v1/ast/oracle/ ./v1/ast/ -count=1
+      - name: format and vet
+        run: |
+          test -z "$(gofmt -l v1/ast/oracle/)"
+          go vet ./v1/ast/oracle/
